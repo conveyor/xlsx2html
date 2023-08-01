@@ -79,7 +79,7 @@ def get_border_style_from_cell(cell):
     return h_styles
 
 
-def get_styles_from_cell(cell, merged_cell_map=None, default_cell_border="none"):
+def get_styles_from_cell(wb, cell, merged_cell_map=None, default_cell_border="none"):
     merged_cell_map = merged_cell_map or {}
 
     h_styles = {"border-collapse": "collapse"}
@@ -101,9 +101,12 @@ def get_styles_from_cell(cell, merged_cell_map=None, default_cell_border="none")
         h_styles['vertical-align'] = cell.alignment.vertical
 
     with contextlib.suppress(AttributeError):
-        if cell.fill.patternType == "solid":
+        if cell.fill.patternType == "solid" and cell.fill.fgColor.type == 'rgb':
             # TODO patternType != 'solid'
             h_styles["background-color"] = normalize_color(cell.fill.fgColor)
+        if cell.fill.patternType == "solid" and cell.fill.fgColor.type == 'theme':
+            color = cell.fill.fgColor
+            h_styles["background-color"] = theme_and_tint_to_rgb(wb, color.theme, color.tint)
 
     if cell.font:
         h_styles["font-size"] = "%spx" % cell.font.sz
@@ -156,7 +159,7 @@ def images_to_data(ws: Worksheet):
     return images_data
 
 
-def worksheet_to_data(ws, locale=None, fs=None, default_cell_border="none"):
+def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
     merged_cell_map = {}
     if OPENPYXL_24:
         merged_cell_ranges = ws.merged_cell_ranges
@@ -224,7 +227,7 @@ def worksheet_to_data(ws, locale=None, fs=None, default_cell_border="none"):
             if merged_cell_info:
                 cell_data["attrs"].update(merged_cell_info["attrs"])
             cell_data["style"].update(
-                get_styles_from_cell(cell, merged_cell_info, default_cell_border)
+                get_styles_from_cell(wb, cell, merged_cell_info, default_cell_border)
             )
             data_row.append(cell_data)
 
@@ -362,7 +365,7 @@ def xlsx2html(
         fs = get_sheet(fb, sheet)
 
     data = worksheet_to_data(
-        ws, locale=locale, fs=fs, default_cell_border=default_cell_border
+       wb, ws, locale=locale, fs=fs, default_cell_border=default_cell_border
     )
     html = render_data_to_html(data, append_headers, append_lineno)
 
