@@ -61,6 +61,10 @@ def tint_luminance(tint, lum):
 
 def theme_and_tint_to_rgb(wb, theme, tint):
   """Given a workbook, a theme number and a tint return a hex based rgb"""
-  rgb = get_theme_colors(wb)[theme]
+  rgb = None
+  try:
+    rgb = get_theme_colors(wb)[theme]
+  except IndexError:
+    rgb = get_theme_colors(wb)[0]
   h, l, s = rgb_to_ms_hls(rgb)
   return rgb_to_hex(ms_hls_to_rgb(h, tint_luminance(tint, l), s))
