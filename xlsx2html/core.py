@@ -2,9 +2,11 @@ import contextlib
 import io
 from collections import defaultdict
 from typing import List
+import json
 
 import openpyxl
 import six
+import html
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.image import Image
 from openpyxl.drawing.spreadsheet_drawing import AnchorMarker
@@ -68,8 +70,8 @@ def get_border_style_from_cell(wb, cell):
         if not b_s:
             continue
         border_style = BORDER_STYLES.get(b_s.style)
-        if border_style is None and b_s.style:
-            border_style = DEFAULT_BORDER_STYLE
+        #if border_style is None and b_s.style:
+        #    border_style = DEFAULT_BORDER_STYLE
 
         if not border_style:
             continue
@@ -91,10 +93,10 @@ def get_styles_from_cell(wb, cell, merged_cell_map=None, default_cell_border="no
         for m_cell in merged_cell_map["cells"]:
             b_styles.update(get_border_style_from_cell(wb, m_cell))
 
-    for b_dir in ["border-right", "border-left", "border-top", "border-bottom"]:
-        style_tag = b_dir + "-style"
-        if (b_dir not in b_styles) and (style_tag not in b_styles):
-            b_styles[b_dir] = default_cell_border
+    #for b_dir in ["border-right", "border-left", "border-top", "border-bottom"]:
+    #    style_tag = b_dir + "-style"
+    #    if (b_dir not in b_styles) and (style_tag not in b_styles):
+    #        b_styles[b_dir] = default_cell_border
         
     h_styles.update(b_styles)
 
@@ -160,11 +162,12 @@ def images_to_data(ws: Worksheet):
     images_data = defaultdict(list)
     for _i in images:
         _id = image_to_data(_i)
-        images_data[(_id["col"], _id["row"])].append(_id)
+        images_data[str(_id["col"]) + ":" + str(_id["row"])].append(_id)
     return images_data
 
 
 def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
+    ws_id = wb.worksheets.index(ws) + 1
     merged_cell_map = {}
     if OPENPYXL_24:
         merged_cell_ranges = ws.merged_cell_ranges
@@ -199,23 +202,30 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
     max_col_number = 0
 
     data_list = []
-    for row_i, row in enumerate(ws.iter_rows()):
+    cell_styles = {}
+    cell_classnames = {}
+    no_found_data = True
+    for row_i, row in  enumerate(reversed(list(ws.iter_rows()))):
         data_row = []
-        data_list.append(data_row)
+        data_list.insert(0, data_row)
+        if no_found_data and all(cell.value == None for cell in row):
+            continue
+        no_found_data = False
+
         for col_i, cell in enumerate(row):
             row_dim = ws.row_dimensions[cell.row]
-
+        
             if cell.coordinate in excluded_cells or row_dim.hidden:
                 continue
-
+        
             if col_i > max_col_number:
                 max_col_number = col_i
-
+        
             height = 19
-
+        
             if row_dim.customHeight:
                 height = round(row_dim.height, 2)
-
+        
             f_cell = None
             if fs:
                 f_cell = fs[cell.coordinate]
@@ -235,15 +245,16 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
             cell_data["style"].update(
                 get_styles_from_cell(wb, cell, merged_cell_info, default_cell_border)
             )
+            style_key = json.dumps(cell_data["style"])
+            cell_styles[style_key] = cell_styles[style_key] + 1 if style_key in cell_styles else 1
+            cell_classnames[style_key] = 'wsid-%s-cellst-%s-%s' % (ws_id, row_i, col_i)
             data_row.append(cell_data)
-
     col_list = []
     max_col_number += 1
 
     column_dimensions = sorted(
         ws.column_dimensions.items(), key=lambda d: column_index_from_string(d[0])
     )
-
     for col_i, col_dim in column_dimensions:
         if not all([col_dim.min, col_dim.max]):
             continue
@@ -265,7 +276,17 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
             )
             if max_col_number < 0:
                 break
-    return {"rows": data_list, "cols": col_list, "images": images_to_data(ws)}
+    style_data = {}
+    for col in data_list:
+        for cell in col:
+            style_key = json.dumps(cell['style'])
+            if cell_styles[style_key] > 1:
+                classname = cell_classnames[style_key]
+                style_data[classname] = cell['style']
+                cell['attrs'].update({'class': classname})
+                cell['style'] = {}
+
+    return {"rows": data_list, "cols": col_list, "images": images_to_data(ws), "styles": style_data}
 
 
 def render_table(data, append_headers, append_lineno):
@@ -299,8 +320,9 @@ def render_table(data, append_headers, append_lineno):
                 continue
             images = []
             colspan = cell["attrs"]["colspan"] if 'colspan' in cell["attrs"] else 1
+            colspan = 1 if colspan is None else colspan
             for colspanned_col in range(cell["column"], cell["column"] + colspan):
-                images = images + (data["images"].get((colspanned_col, cell["row"])) or [])
+                images = images + (data["images"].get(str(colspanned_col)+ ':' +str(cell["row"])) or [])
             
  
             formatted_images = []
@@ -332,6 +354,14 @@ def render_table(data, append_headers, append_lineno):
     html.append("</table>")
     return "\n".join(html)
 
+def render_styles(data):
+    styles = data['styles']
+    style_data = ""
+    for key in styles.keys():
+        value = styles[key]
+        style_data = "%s .%s { %s }" % (style_data, key, render_inline_styles(value))
+    return style_data
+    
 
 def render_data_to_html(data, append_headers, append_lineno):
     html = """
@@ -340,13 +370,14 @@ def render_data_to_html(data, append_headers, append_lineno):
     <head>
         <meta charset="UTF-8">
         <title>Title</title>
+        <style>%s</style>
     </head>
     <body>
         %s
     </body>
     </html>
     """
-    return html % render_table(data, append_headers, append_lineno)
+    return html % (render_styles(data), render_table(data, append_headers, append_lineno))
 
 
 def get_sheet(wb, sheet):

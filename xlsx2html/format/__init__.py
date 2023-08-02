@@ -1,6 +1,7 @@
 import datetime
 
 import six
+import html
 from babel.dates import LC_TIME
 from babel.numbers import LC_NUMERIC
 
@@ -12,8 +13,8 @@ from .number import format_decimal
 
 
 def format_cell(cell, locale=None, f_cell=None):
-    value = cell.value
-    formatted_value = value if value == 0 else value or "&nbsp;"
+    value = html.escape(cell.value) if type(cell.value) == str else cell.value
+    formatted_value = value if value == 0 else value or ""
     cell_format = cell.number_format
     if not cell_format:
         return format_hyperlink(formatted_value, cell.hyperlink)
