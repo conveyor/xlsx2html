@@ -41,7 +41,8 @@ def render_inline_styles(styles):
 
 
 def normalize_color(wb, color):
-    # TODO RGBA
+    if color.type == 'auto':
+         return "#000000"
     if color.type == 'theme':
        return "#" + theme_and_tint_to_rgb(wb, color.theme, color.tint)
     
@@ -128,7 +129,7 @@ def get_styles_from_cell(wb, cell, merged_cell_map=None, default_cell_border="no
 
 
 def get_cell_id(cell):
-    return "{}!{}".format(cell.parent.title, cell.coordinate)
+    return "{}".format(cell.coordinate)
 
 
 def image_to_data(image: Image) -> dict:
@@ -204,7 +205,18 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
     data_list = []
     cell_styles = {}
     cell_classnames = {}
+    row_height = {}
     no_found_data = True
+    cells_with_list = set()
+
+    # keep track of data validation cells
+    for dv in ws.data_validations.dataValidation:
+      if dv.type == 'list':
+         for cellrange in dv.sqref.ranges:
+            for row in cellrange.rows:
+                for cell_coord in row:
+                    cells_with_list.add(cell_coord)
+
     for row_i, row in  enumerate(reversed(list(ws.iter_rows()))):
         data_row = []
         data_list.insert(0, data_row)
@@ -222,22 +234,25 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
                 max_col_number = col_i
         
             height = 19
-        
+
             if row_dim.customHeight:
                 height = round(row_dim.height, 2)
-        
+            row_height[cell.row] = height
+
+
             f_cell = None
             if fs:
                 f_cell = fs[cell.coordinate]
             formatted_value = format_cell(cell, locale=locale, f_cell=f_cell)
-            formatted_value = formatted_value.replace("\n", "<br/>") if type(formatted_value) == str else formatted_value 
+            formatted_value = formatted_value.replace("\n", "<br/>") if type(formatted_value) == str else formatted_value    
             cell_data = {
                 "column": cell.column,
                 "row": cell.row,
                 "value": cell.value,
                 "formatted_value": formatted_value,
+                "is_list": (cell.row, cell.column) in cells_with_list,
                 "attrs": {"id": get_cell_id(cell)},
-                "style": {"height": f"{height}pt"},
+                "style": {},
             }
             merged_cell_info = merged_cell_map.get(cell.coordinate, {})
             if merged_cell_info:
@@ -271,6 +286,7 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
                 {
                     "index": col_dim.index,
                     "hidden": col_dim.hidden,
+                    "width": col_width,
                     "style": {"min-width": "{}px".format(col_width), "visibility": visibility},
                 }
             )
@@ -286,7 +302,7 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
                 cell['attrs'].update({'class': classname})
                 cell['style'] = {}
 
-    return {"rows": data_list, "cols": col_list, "images": images_to_data(ws), "styles": style_data}
+    return {"title": ws.title, "rows": data_list, "cols": col_list, "images": images_to_data(ws), "styles": style_data, "rowHeights": row_height}
 
 
 def render_table(data, append_headers, append_lineno):
