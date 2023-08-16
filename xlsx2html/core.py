@@ -20,6 +20,8 @@ from xlsx2html.format import format_cell
 from xlsx2html.utils.image import bytes_to_datauri
 from xlsx2html.utils.theme import theme_and_tint_to_rgb
 
+MAX_COLUMNS_COUNT = 50
+
 def render_attrs(attrs):
     if not attrs:
         return ""
@@ -225,14 +227,15 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
         no_found_data = False
 
         for col_i, cell in enumerate(row):
+            if col_i >= MAX_COLUMNS_COUNT:
+                break
             row_dim = ws.row_dimensions[cell.row]
-        
             if cell.coordinate in excluded_cells or row_dim.hidden:
                 continue
         
             if col_i > max_col_number:
                 max_col_number = col_i
-        
+            
             height = 19
 
             if row_dim.customHeight:
@@ -294,15 +297,14 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
                 break
     style_data = {}
     for col in data_list:
-        for cell in col:
+        for col_i, cell in enumerate(col):
             style_key = json.dumps(cell['style'])
             if cell_styles[style_key] > 1:
                 classname = cell_classnames[style_key]
                 style_data[classname] = cell['style']
                 cell['attrs'].update({'class': classname})
                 cell['style'] = {}
-
-    return {"title": ws.title, "rows": data_list, "cols": col_list, "images": images_to_data(ws), "styles": style_data, "rowHeights": row_height}
+    return {"title": ws.title, "rows": data_list, "cols": col_list[:MAX_COLUMNS_COUNT], "images": images_to_data(ws), "styles": style_data, "rowHeights": row_height}
 
 
 def render_table(data, append_headers, append_lineno):
