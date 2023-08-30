@@ -11,7 +11,7 @@ from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.image import Image
 from openpyxl.drawing.spreadsheet_drawing import AnchorMarker
 from openpyxl.styles.colors import COLOR_INDEX, aRGB_REGEX
-from openpyxl.utils import rows_from_range, column_index_from_string, units
+from openpyxl.utils import rows_from_range, column_index_from_string, get_column_letter, units
 from openpyxl.worksheet.worksheet import Worksheet
 
 from xlsx2html.compat import OPENPYXL_24
@@ -273,6 +273,7 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
     column_dimensions = sorted(
         ws.column_dimensions.items(), key=lambda d: column_index_from_string(d[0])
     )
+    column_index = 1
     for col_i, col_dim in column_dimensions:
         if not all([col_dim.min, col_dim.max]):
             continue
@@ -287,12 +288,13 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
             max_col_number -= 1
             col_list.append(
                 {
-                    "index": col_dim.index,
+                    "index": get_column_letter(column_index),
                     "hidden": col_dim.hidden,
                     "width": col_width,
                     "style": {"min-width": "{}px".format(col_width), "visibility": visibility},
                 }
             )
+            column_index += 1
             if max_col_number < 0:
                 break
     style_data = {}
@@ -304,7 +306,7 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
                 style_data[classname] = cell['style']
                 cell['attrs'].update({'class': classname})
                 cell['style'] = {}
-    return {"title": ws.title, "rows": data_list, "cols": col_list[:MAX_COLUMNS_COUNT], "images": images_to_data(ws), "styles": style_data, "rowHeights": row_height}
+    return {"title": ws.title, "visible": ws.sheet_state == "visible", "rows": data_list, "cols": col_list[:MAX_COLUMNS_COUNT], "images": images_to_data(ws), "styles": style_data, "rowHeights": row_height}
 
 
 def render_table(data, append_headers, append_lineno):

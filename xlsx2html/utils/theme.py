@@ -36,12 +36,14 @@ def get_theme_colors(wb):
     """Gets theme colors from the workbook"""
     # see: https://groups.google.com/forum/#!topic/openpyxl-users/I0k3TfqNLrc
     from openpyxl.xml.functions import QName, fromstring
+    colors = []
+    if wb.loaded_theme is None:
+        return ['#000000']
     xlmns = 'http://schemas.openxmlformats.org/drawingml/2006/main'
     root = fromstring(wb.loaded_theme)
     themeEl = root.find(QName(xlmns, 'themeElements').text)
     colorSchemes = themeEl.findall(QName(xlmns, 'clrScheme').text)
     firstColorScheme = colorSchemes[0]
-    colors = []
     for c in ['lt1', 'dk1', 'lt2', 'dk2', 'accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6']:
         accent = firstColorScheme.find(QName(xlmns, c).text)
         for i in list(accent): # walk all child nodes, rather than assuming [0]
