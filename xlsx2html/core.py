@@ -279,7 +279,7 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
     column_dimensions = sorted(
         ws.column_dimensions.items(), key=lambda d: column_index_from_string(d[0])
     )
-    for col_i in range(1, ws.max_column):
+    for col_i in range(1, ws.max_column + 1):
         # set defaults
         col_list.append(
                 {
