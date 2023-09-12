@@ -19,6 +19,7 @@ from xlsx2html.constants.border import DEFAULT_BORDER_STYLE, BORDER_STYLES
 from xlsx2html.format import format_cell
 from xlsx2html.utils.image import bytes_to_datauri
 from xlsx2html.utils.theme import theme_and_tint_to_rgb
+from xlsx2html.utils.cell import dropdown_options_for_cell
 
 MAX_COLUMNS_COUNT = 50
 
@@ -230,7 +231,7 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
             if col_i >= MAX_COLUMNS_COUNT:
                 break
             row_dim = ws.row_dimensions[cell.row]
-            if cell.coordinate in excluded_cells or row_dim.hidden:
+            if cell.coordinate in excluded_cells:
                 continue
         
             if col_i > max_col_number:
@@ -247,14 +248,19 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
             if fs:
                 f_cell = fs[cell.coordinate]
             formatted_value = format_cell(cell, locale=locale, f_cell=f_cell)
-            formatted_value = formatted_value.replace("\n", "<br/>") if type(formatted_value) == str else formatted_value    
+            formatted_value = formatted_value.replace("\n", "<br/>") if type(formatted_value) == str else formatted_value
+            is_list = (cell.row, cell.column) in cells_with_list
+            dropdown_options = dropdown_options_for_cell(wb, ws, cell) if is_list else []
+                 
             cell_data = {
                 "column": cell.column,
                 "row": cell.row,
                 "value": cell.value,
                 "formatted_value": formatted_value,
                 "is_list": (cell.row, cell.column) in cells_with_list,
+                "drowdown_options": dropdown_options,
                 "attrs": {"id": get_cell_id(cell)},
+                "hidden": row_dim.hidden,
                 "style": {},
             }
             merged_cell_info = merged_cell_map.get(cell.coordinate, {})
@@ -273,28 +279,35 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
     column_dimensions = sorted(
         ws.column_dimensions.items(), key=lambda d: column_index_from_string(d[0])
     )
-    column_index = 1
-    for col_i, col_dim in column_dimensions:
+    for col_i in range(1, ws.max_column):
+        # set defaults
+        col_list.append(
+                {
+                    "index": get_column_letter(col_i),
+                    "hidden": False,
+                    "width": 121,
+                    "style": {"min-width": "121px"},
+                }
+            )
+    for col_letter, col_dim in column_dimensions:
         if not all([col_dim.min, col_dim.max]):
             continue
         
         width = 0.89
         if col_dim.customWidth:
             width = round(col_dim.width / 10.0, 2)
-        col_width = 96 * width
+        col_width = round(96 * width, 1)
         
         for _ in six.moves.range((col_dim.max - col_dim.min) + 1):
             visibility = "collapse" if col_dim.width == 0 else "visible"
             max_col_number -= 1
-            col_list.append(
-                {
-                    "index": get_column_letter(column_index),
+            updated_col = {
+                    "index": col_letter,
                     "hidden": col_dim.hidden,
                     "width": col_width,
                     "style": {"min-width": "{}px".format(col_width), "visibility": visibility},
                 }
-            )
-            column_index += 1
+            col_list = list(map(lambda col: updated_col if col["index"] == col_letter else col, col_list))
             if max_col_number < 0:
                 break
     style_data = {}
