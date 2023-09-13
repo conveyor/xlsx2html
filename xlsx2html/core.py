@@ -258,7 +258,7 @@ def worksheet_to_data(wb, ws, locale=None, fs=None, default_cell_border="none"):
                 "value": cell.value,
                 "formatted_value": formatted_value,
                 "is_list": (cell.row, cell.column) in cells_with_list,
-                "drowdown_options": dropdown_options,
+                "dropdown_options": dropdown_options,
                 "attrs": {"id": get_cell_id(cell)},
                 "hidden": row_dim.hidden,
                 "style": {},
