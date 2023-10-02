@@ -46,6 +46,9 @@ def resolve_hyperlink_formula(cell, f_cell):
 
 
 def format_hyperlink(value, cell, f_cell=None):
+    if cell is None:
+        return value
+
     hyperlink = HyperlinkType(title=value)
 
     if cell.hyperlink:
