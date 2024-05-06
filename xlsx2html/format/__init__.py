@@ -16,8 +16,10 @@ def format_cell(cell, locale=None, f_cell=None):
     value = html.escape(cell.value) if type(cell.value) == str else cell.value
     formatted_value = value if value == 0 else value or ""
     cell_format = cell.number_format
-    if not cell_format:
+    if not cell_format and cell.hyperlink:
         return format_hyperlink(formatted_value, cell.hyperlink)
+    if not cell_format and not cell.hyperlink:
+        return formatted_value
 
     if isinstance(value, six.integer_types) or isinstance(value, float):
         if cell_format.lower() != "general":
