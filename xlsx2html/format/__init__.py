@@ -19,6 +19,8 @@ def format_cell(cell, locale=None, f_cell=None):
     if not cell_format:
         return format_hyperlink(formatted_value, cell.hyperlink)
 
+    if isinstance(value, bool):
+        return value and "TRUE" or "FALSE"
     if isinstance(value, six.integer_types) or isinstance(value, float):
         if cell_format.lower() != "general":
             locale = locale or LC_NUMERIC
